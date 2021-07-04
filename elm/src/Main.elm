@@ -4,9 +4,30 @@ import Browser
 import Element exposing (..)
 import Element.Background as Background
 import Element.Border as Border
+import Element.Events exposing (onClick)
 import Element.Font as Font
 import Element.Input as Input
 import Html exposing (Html)
+import Html.Events exposing (on)
+import Http
+import Json.Decode as Decode exposing (Decoder)
+
+
+onEnter : msg -> Element.Attribute msg
+onEnter msg =
+    Element.htmlAttribute
+        (on "keyup"
+            (Decode.field "key" Decode.string
+                |> Decode.andThen
+                    (\key ->
+                        if key == "Enter" then
+                            Decode.succeed msg
+
+                        else
+                            Decode.fail "Not the enter key"
+                    )
+            )
+        )
 
 
 
@@ -15,12 +36,45 @@ import Html exposing (Html)
 
 giphyToken : String
 giphyToken =
+    -- Token for dev purposes
     "Yc3lO0Z7bgW0DJWq4MtS42FGvcII6GIn"
 
 
-type History
-    = List String
-    | NoHistory
+type alias Gif =
+    { src : String
+    , description : String
+    }
+
+
+gifDecoder : Decoder Gif
+gifDecoder =
+    Decode.map2 Gif Decode.string (Decode.succeed "foobar")
+
+
+responseDecoder : Decoder (List Gif)
+responseDecoder =
+    gifDecoder
+        |> Decode.at [ "images", "downsized", "url" ]
+        |> Decode.list
+        |> Decode.at [ "data" ]
+
+
+getGifs : String -> Cmd Msg
+getGifs term =
+    Http.get
+        { url = "https://api.giphy.com/v1/gifs/search?limit=4&" ++ "api_key=" ++ giphyToken ++ "&q=" ++ term
+        , expect = Http.expectJson GotGifs responseDecoder
+        }
+
+
+shouldFetchGifs : GifSearch -> Cmd Msg
+shouldFetchGifs gifSearch =
+    case gifSearch of
+        GifSearch term ->
+            getGifs term
+
+        NoSearch ->
+            Cmd.none
 
 
 type GifSearch
@@ -29,12 +83,12 @@ type GifSearch
 
 
 type Model
-    = Model GifSearch History
+    = Model GifSearch (List Gif) (List String)
 
 
 init : ( Model, Cmd Msg )
 init =
-    ( Model NoSearch NoHistory, Cmd.none )
+    ( Model NoSearch [] [], getGifs "cat" )
 
 
 
@@ -42,13 +96,44 @@ init =
 
 
 type Msg
-    = NoOp
-    | EnteredGifTerm String
+    = EnteredGifTerm String
+    | GotGifs (Result Http.Error (List Gif))
+    | ClickedHistory String
+    | PressedEnterKey
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
-update msg model =
-    ( model, Cmd.none )
+update msg (Model gifSearch gifs history) =
+    let
+        model =
+            Model gifSearch gifs history
+    in
+    case msg of
+        EnteredGifTerm term ->
+            ( Model (GifSearch term) gifs history, Cmd.none )
+
+        PressedEnterKey ->
+            ( model, shouldFetchGifs gifSearch )
+
+        ClickedHistory term ->
+            ( model, getGifs term )
+
+        GotGifs (Ok newGifs) ->
+            let
+                updatedHistory =
+                    case gifSearch of
+                        GifSearch term ->
+                            history
+                                |> List.filter ((/=) term)
+                                |> (++) [ term ]
+
+                        NoSearch ->
+                            history
+            in
+            ( Model gifSearch newGifs updatedHistory, Cmd.none )
+
+        GotGifs (Err _) ->
+            ( model, Cmd.none )
 
 
 
@@ -75,6 +160,11 @@ white =
     rgb255 255 255 255
 
 
+hoverColor : Color
+hoverColor =
+    rgb255 248 249 250
+
+
 black : Color
 black =
     rgb255 0 0 0
@@ -91,7 +181,21 @@ ligthGray =
 
 
 view : Model -> Html Msg
-view _ =
+view model =
+    let
+        currentText =
+            case model of
+                Model NoSearch _ _ ->
+                    ""
+
+                Model (GifSearch term) _ _ ->
+                    term
+
+        gifContent =
+            case model of
+                Model _ gifs _ ->
+                    viewGifs gifs
+    in
     layout [] <|
         row [ width fill, height fill ]
             [ column [ padding 10, height fill, sideBarBackground, Font.color white ]
@@ -107,13 +211,13 @@ view _ =
                     ]
                   <|
                     text "Historial de Búsqueda"
-                , el [ paddingXY 0 20, width fill ] <| viewHistory
+                , el [ paddingXY 0 20, width fill ] <| viewHistory model
                 ]
             , column [ width fill, padding 20, height fill ]
                 [ el [ width fill, paddingEach { dimensions | bottom = 30 } ] <|
-                    Input.text [ Font.alignLeft ]
+                    Input.text [ Font.alignLeft, onEnter PressedEnterKey ]
                         { onChange = EnteredGifTerm
-                        , text = ""
+                        , text = currentText
                         , placeholder = Just <| Input.placeholder [] (text "Buscar Gifs")
                         , label = Input.labelAbove [ alignLeft ] (text "Buscar:")
                         }
@@ -127,33 +231,22 @@ view _ =
                     , Border.color ligthGray
                     ]
                   <|
-                    viewGifs
+                    gifContent
                 ]
             ]
 
 
-gifs : List String
-gifs =
-    [ "https://media0.giphy.com/media/3o7abAHdYvZdBNnGZq/giphy.gif?cid=a2e719177gdjaeyocymzar83t2ohn2f58wghec0uf010ax6r&rid=giphy.gif&ct=g"
-    , "https://media0.giphy.com/media/xTiTnf9SCIVk8HIvE4/giphy.gif?cid=a2e719177gdjaeyocymzar83t2ohn2f58wghec0uf010ax6r&rid=giphy.gif&ct=g"
-    , "https://media4.giphy.com/media/3o7527pa7qs9kCG78A/giphy.gif?cid=a2e719177gdjaeyocymzar83t2ohn2f58wghec0uf010ax6r&rid=giphy.gif&ct=g"
-    , "https://media3.giphy.com/media/RQSuZfuylVNAY/giphy.gif?cid=a2e719177gdjaeyocymzar83t2ohn2f58wghec0uf010ax6r&rid=giphy.gif&ct=g"
-    , "https://media3.giphy.com/media/Pn1gZzAY38kbm/giphy.gif?cid=a2e719177gdjaeyocymzar83t2ohn2f58wghec0uf010ax6r&rid=giphy.gif&ct=g"
-    , "https://media4.giphy.com/media/mCRJDo24UvJMA/giphy.gif?cid=a2e719177gdjaeyocymzar83t2ohn2f58wghec0uf010ax6r&rid=giphy.gif&ct=g"
-    ]
-
-
-viewGifs : Element msg
-viewGifs =
+viewGifs : List Gif -> Element msg
+viewGifs gifs =
     let
-        wrapImage src =
+        wrapImage { src } =
             el [] <| image [] { src = src, description = "stubbed description" }
     in
     wrappedRow [] <| List.map wrapImage gifs
 
 
-viewHistory : Element msg
-viewHistory =
+viewHistory : Model -> Element Msg
+viewHistory (Model _ _ history) =
     let
         shouldUseBorder index =
             case index of
@@ -166,13 +259,24 @@ viewHistory =
                     ]
 
         viewUsedTerm index term =
-            el ([ width fill, padding 15 ] ++ shouldUseBorder index) <| text term
+            el
+                ([ width fill
+                 , padding 15
+                 , pointer
+                 , onClick <|
+                    ClickedHistory term
+                 ]
+                    ++ shouldUseBorder index
+                )
+            <|
+                text term
     in
-    [ "Dog", "Cat" ]
+    history
         |> List.indexedMap viewUsedTerm
         |> column
             [ width fill
             , Background.color white
+            , mouseOver [ Background.color hoverColor ]
             , Font.color black
             , Font.alignLeft
             , Border.rounded 10
