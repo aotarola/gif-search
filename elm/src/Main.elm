@@ -1,20 +1,36 @@
 module Main exposing (..)
 
 import Browser
-import Html exposing (Html, text, div, h1, img)
+import Html exposing (Html, div, h1, img, text)
 import Html.Attributes exposing (src)
+
 
 
 ---- MODEL ----
 
 
-type alias Model =
-    {}
+giphyToken : String
+giphyToken =
+    "Yc3lO0Z7bgW0DJWq4MtS42FGvcII6GIn"
+
+
+type History
+    = List String
+    | NoHistory
+
+
+type GifSearch
+    = GifSearch String
+    | NoSearch
+
+
+type Model
+    = Model GifSearch History
 
 
 init : ( Model, Cmd Msg )
 init =
-    ( {}, Cmd.none )
+    ( Model NoSearch NoHistory, Cmd.none )
 
 
 
