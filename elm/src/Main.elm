@@ -130,7 +130,7 @@ update msg (Model gifSearch gifs history) =
                         NoSearch ->
                             history
             in
-            ( Model gifSearch newGifs updatedHistory, Cmd.none )
+            ( Model NoSearch newGifs updatedHistory, Cmd.none )
 
         GotGifs (Err _) ->
             ( model, Cmd.none )
