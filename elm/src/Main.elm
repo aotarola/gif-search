@@ -59,8 +59,8 @@ responseDecoder =
         |> Decode.at [ "data" ]
 
 
-getGifs : String -> Cmd Msg
-getGifs term =
+fetchGifs : String -> Cmd Msg
+fetchGifs term =
     Http.get
         { url = "https://api.giphy.com/v1/gifs/search?limit=4&" ++ "api_key=" ++ giphyToken ++ "&q=" ++ term
         , expect = Http.expectJson GotGifs responseDecoder
@@ -71,7 +71,7 @@ shouldFetchGifs : GifSearch -> Cmd Msg
 shouldFetchGifs gifSearch =
     case gifSearch of
         GifSearch term ->
-            getGifs term
+            fetchGifs term
 
         NoSearch ->
             Cmd.none
@@ -88,7 +88,7 @@ type Model
 
 init : ( Model, Cmd Msg )
 init =
-    ( Model NoSearch [] [], getGifs "cat" )
+    ( Model NoSearch [] [], fetchGifs "cat" )
 
 
 
@@ -116,7 +116,7 @@ update msg (Model gifSearch gifs history) =
             ( model, shouldFetchGifs gifSearch )
 
         ClickedHistory term ->
-            ( model, getGifs term )
+            ( model, fetchGifs term )
 
         GotGifs (Ok newGifs) ->
             let
